@@ -1,0 +1,20 @@
+﻿<Window x:Class="Barbora.App.Login"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Barbora.App"
+        mc:Ignorable="d"
+        WindowStartupLocation="CenterScreen"
+        Title="Prisijungimas" Height="300" Width="450"
+        ResizeMode="NoResize">
+    <Grid>
+        <TextBlock Height="23" HorizontalAlignment="Left" Margin="10,10,0,0" Name="LoginHeading" Text="Įveskite prisijungimo duomenis" VerticalAlignment="Top" FontSize="17" FontStretch="ExtraCondensed" Grid.RowSpan="2"/>
+        <TextBlock Height="23" HorizontalAlignment="Left" Margin="55,93,0,0" Name="textBlock1" Text="El. paštas" VerticalAlignment="Top" Width="67" Grid.Row="1" />
+        <TextBlock Height="23" HorizontalAlignment="Left" Margin="47,141,0,0" Name="textBlock2" Text="Slaptažodis" VerticalAlignment="Top" Width="77" Grid.Row="1" />
+        <TextBox Height="23" HorizontalAlignment="Left" Margin="118,88,0,0" Name="emailTextBox" VerticalAlignment="Top" Width="247" Grid.Row="1" />
+        <PasswordBox Height="23" HorizontalAlignment="Left" Margin="118,141,0,0" Name="passwordTextBox" VerticalAlignment="Top" Width="247" Grid.Row="1" />
+        <Button Content="Prisijungti" Height="23" HorizontalAlignment="Left" Margin="118,184,0,0" Name="LoginBtn" VerticalAlignment="Top" Width="104" Click="LoginBtn_Click" Grid.Row="1" />
+        <TextBlock Height="23" HorizontalAlignment="Left" x:Name ="errorMessage" VerticalAlignment="Top" Width="247" Margin="118,226,0,0"  OpacityMask="Crimson" Foreground="#FFE5572C" Grid.Row="1"  />
+    </Grid>
+</Window>

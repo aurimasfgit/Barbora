@@ -1,0 +1,48 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>barbora_7vD_icon.ico</ApplicationIcon>
+    <SignAssembly>false</SignAssembly>
+    <DelaySign>false</DelaySign>
+    <AssemblyOriginatorKeyFile>barbora.pfx</AssemblyOriginatorKeyFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="barbora.ico" />
+    <None Remove="barb_eqC_icon.ico" />
+    <None Remove="Sounds\beep-06.wav" />
+    <None Remove="Sounds\cartoon-birds-2_daniel-simion.wav" />
+    <None Remove="Sounds\dixie-horn_daniel-simion.wav" />
+    <None Remove="Sounds\Fart-Common-Everyday-Fart_Mike-Koenig.wav" />
+    <None Remove="Sounds\Horn Honk-SoundBible.com-1162546405.wav" />
+    <None Remove="Sounds\sos-morse-code_daniel-simion.wav" />
+    <None Remove="Sounds\yes-2.wav" />
+    <None Remove="Sounds\yummy.wav" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="barbora.ico" />
+    <EmbeddedResource Include="Sounds\beep-06.wav" />
+    <EmbeddedResource Include="Sounds\cartoon-birds-2_daniel-simion.wav" />
+    <EmbeddedResource Include="Sounds\dixie-horn_daniel-simion.wav" />
+    <EmbeddedResource Include="Sounds\Fart-Common-Everyday-Fart_Mike-Koenig.wav" />
+    <EmbeddedResource Include="Sounds\Horn Honk-SoundBible.com-1162546405.wav" />
+    <EmbeddedResource Include="Sounds\sos-morse-code_daniel-simion.wav" />
+    <EmbeddedResource Include="Sounds\yes-2.wav" />
+    <EmbeddedResource Include="Sounds\yummy.wav" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="3.1.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="3.1.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Barbora.Core\Barbora.Core.csproj" />
+  </ItemGroup>
+
+</Project>
