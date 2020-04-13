@@ -1,7 +1,6 @@
 ﻿using Barbora.Core.Clients;
 using Barbora.Core.Models;
 using Barbora.Core.Models.Exceptions;
-using Barbora.Core.Notifiers.Interfaces;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,17 +12,18 @@ namespace Barbora.Core.Services
         void Start();
         void Stop();
 
-        void SetAvailableTimeNotifier(IAvailableTimeNotifier availableTimeNotifier);
-        void SetJobDoneNotifier(IJobDoneNotifier jobDoneNotifier);
-        void SetExceptionHandler(IExceptionHandler exceptionHandler);
         void SetInterval(int seconds);
+
+        event EventHandler<AvailableTimeInfo> OnAvailableTimeFound;
+        event EventHandler<bool> OnJobCompleted;
+        event EventHandler<Exception> OnException;
 
         void Dispose();
     }
 
     public class BarboraNotifyingService : IBarboraNotifyingService
     {
-        private IBarboraApiClient barboraApiClient;
+        private readonly IBarboraApiClient barboraApiClient;
 
         public BarboraNotifyingService(IBarboraApiClient barboraApiClient)
         {
@@ -53,34 +53,12 @@ namespace Barbora.Core.Services
         }
 
         private Action cancelWork;
+
         private int delayInSeconds = 60;
-        private IAvailableTimeNotifier availableTimeNotifier;
-        private IJobDoneNotifier jobDoneNotifier;
-        private IExceptionHandler exceptionHandler;
 
-        public void SetAvailableTimeNotifier(IAvailableTimeNotifier availableTimeNotifier)
-        {
-            if (availableTimeNotifier == null)
-                throw new ArgumentNullException("availableTimeNotifier");
-
-            this.availableTimeNotifier = availableTimeNotifier;
-        }
-
-        public void SetJobDoneNotifier(IJobDoneNotifier jobDoneNotifier)
-        {
-            if (jobDoneNotifier == null)
-                throw new ArgumentNullException("jobDoneNotifier");
-
-            this.jobDoneNotifier = jobDoneNotifier;
-        }
-
-        public void SetExceptionHandler(IExceptionHandler exceptionHandler)
-        {
-            if (exceptionHandler == null)
-                throw new ArgumentNullException("exceptionHandler");
-
-            this.exceptionHandler = exceptionHandler;
-        }
+        public event EventHandler<AvailableTimeInfo> OnAvailableTimeFound;
+        public event EventHandler<bool> OnJobCompleted;
+        public event EventHandler<Exception> OnException;
 
         public void SetInterval(int seconds)
         {
@@ -122,20 +100,20 @@ namespace Barbora.Core.Services
                         {
                             if (hour.available)
                             {
-                                var info = new AvailableTimeInfo();
+                                var info = new AvailableTimeInfo
+                                {
+                                    DayId = deliveryDay.id,
+                                    Day = deliveryDay.day,
 
-                                info.DayId = deliveryDay.id;
-                                info.Day = deliveryDay.day;
+                                    HourId = hour.id,
+                                    Hour = hour.hour,
 
-                                info.HourId = hour.id;
-                                info.Hour = hour.hour;
+                                    IsExpressDelivery = deliveryDay.isExpressDelivery,
 
-                                info.IsExpressDelivery = deliveryDay.isExpressDelivery;
+                                    Price = hour.price
+                                };
 
-                                info.Price = hour.price;
-
-                                if (availableTimeNotifier != null)
-                                    availableTimeNotifier.Notify(info);
+                                OnAvailableTimeFound?.Invoke(this, info);
 
                                 jobCompletedWithResults = true;
                             }
@@ -143,13 +121,14 @@ namespace Barbora.Core.Services
                     }
                 }
 
-                if (jobDoneNotifier != null)
-                    jobDoneNotifier.Notify(jobCompletedWithResults);
+                OnJobCompleted?.Invoke(this, jobCompletedWithResults);
             }
             catch (Exception exc)
             {
-                if (exceptionHandler != null)
-                    exceptionHandler.Handle(exc);
+                if (OnException != null)
+                    OnException.Invoke(this, exc);
+                else
+                    throw exc;
             }
         }
 

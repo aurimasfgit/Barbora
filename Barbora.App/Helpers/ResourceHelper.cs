@@ -2,12 +2,12 @@
 using System.IO;
 using System.Reflection;
 
-namespace Barbora.App.Utils
+namespace Barbora.App.Helpers
 {
     public static class ResourceHelper
     {
-        private static string assemblyName = "Barbora.App";
-        private static Assembly assembly = typeof(App).GetTypeInfo().Assembly;
+        private static readonly string assemblyName = "Barbora.App";
+        private static readonly Assembly assembly = typeof(App).GetTypeInfo().Assembly;
 
         public static Stream GetResourceStream(string resourceName)
         {

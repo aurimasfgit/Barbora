@@ -1,14 +1,15 @@
-﻿using Barbora.App.Services;
-using Barbora.App.Utils;
-using Barbora.Core;
+﻿using Barbora.App.Helpers;
+using Barbora.App.Models;
+using Barbora.App.Services;
 using Barbora.Core.Clients;
 using Barbora.Core.Models;
 using Barbora.Core.Models.Exceptions;
-using Barbora.Core.Notifiers;
 using Barbora.Core.Services;
+using Barbora.Core.Utils;
+using Newtonsoft.Json;
 using System;
-using System.Diagnostics;
 using System.Linq;
+using System.Security;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Forms;
@@ -20,14 +21,14 @@ namespace Barbora.App
         void Show();
         void Close();
 
-        Task InitializeAfterLoginAsync();
+        Task ShowAfterLoginAsync();
     }
 
-    public partial class Main : Window, IMainWindow
+    public partial class Main : BaseWindow, IMainWindow
     {
-        private IBarboraApiClient barboraApiClient;
-        private IBarboraNotifyingService barboraNotifyingService;
-        private ISoundPlayerService soundPlayerService;
+        private readonly IBarboraApiClient barboraApiClient;
+        private readonly IBarboraNotifyingService barboraNotifyingService;
+        private readonly ISoundPlayerService soundPlayerService;
 
         public Main(IBarboraApiClient barboraApiClient, IBarboraNotifyingService barboraNotifyingService, ISoundPlayerService soundPlayerService)
         {
@@ -36,72 +37,33 @@ namespace Barbora.App
             this.soundPlayerService = soundPlayerService;
 
             InitializeComponent();
+            InitializeNotifyIcon();
+            InitializeApiClientEvents();
 
-            notifyIcon = new NotifyIcon();
-            notifyIcon.Icon = new System.Drawing.Icon(ResourceHelper.GetResourceStream("barbora.ico"));
-            notifyIcon.MouseDoubleClick += new MouseEventHandler(NotifyIconOnDoubleClick);
-            notifyIcon.BalloonTipClicked += new EventHandler(NotifyIconOnBalloonTipClick);
+            InfoBox.SelectedValuePath = "Value";
+            InfoBox.DisplayMemberPath = "Text";
 
             StartBtn.IsEnabled = true;
             StopBtn.IsEnabled = false;
+            LogOutBtn.IsEnabled = true;
         }
 
-        private async Task LoadAddresses()
-        {
-            var addressResponse = await barboraApiClient.GetAddressAsync();
-
-            // TODO: [show all addresses in dropdown and let to choose (one or options: "Visi", "Iki duru", "Stoteles", "I automobili")]
-
-            var homeAddress = addressResponse?.address.Where(x => x.addressType == (int)AddressTypeEnum.Home && x.deliveryMethodType == (int)DeliveryMethodTypeEnum.Home).FirstOrDefault();
-
-            //homeAddress = null;
-
-            if (homeAddress == null)
-                throw new FriendlyException("Nepavyko nustatyti pristatymo adreso. Nueik į www.barbora.lt ir pasitikrink...");
-
-            // TODO: [handle those "FriendlyException" exceptions]
-
-            await SetDeliveryAddress(homeAddress.id);
-        }
-
-        private async Task SetDeliveryAddress(string addressId)
-        {
-            var changeDeliveryAddressResponse = await barboraApiClient.ChangeDeliveryAddressAsync(addressId);
-
-            if (changeDeliveryAddressResponse != null)
-                PushMessageToLog(string.Format("Nustatytas pristatymo adresas: {0}", changeDeliveryAddressResponse?.cart?.address));
-            else
-                throw new FriendlyException("Nepavyko pakeisti pristatymo adreso");
-        }
-
-        public async Task InitializeAfterLoginAsync()
-        {
-            ((App)System.Windows.Application.Current).IsLoggedIn = true;
-
-            await LoadAddresses();
-
-            Show();
-        }
-
-        private string balloonTextFoundAvailable = "Rasti galimi pristatymo laikai!";
-        private string balloonTextNotStarted = "Pamiršai startuoti programą...";
-        private string balloonTextStarted = "Atsiradus laikui - pranešiu ;)";
-        private string restoreText = "Double click the icon to restore";
-
-        private string GetNowDateTime()
-        {
-            return DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-        }
+        #region Notify Icon
 
         private NotifyIcon notifyIcon;
 
-        private void ShowActivatedWindow()
+        private void InitializeNotifyIcon()
         {
-            WindowState = WindowState.Normal;
-            ShowActivated = true;
+            notifyIcon = new NotifyIcon
+            {
+                Icon = new System.Drawing.Icon(ResourceHelper.GetResourceStream("Icons.barbora.ico"))
+            };
+
+            notifyIcon.MouseDoubleClick += new MouseEventHandler(NotifyIconOnDoubleClick);
+            notifyIcon.BalloonTipClicked += new EventHandler(NotifyIconOnBalloonTipClick);
         }
 
-        private void NotifyIconOnDoubleClick(object sender, System.Windows.Forms.MouseEventArgs e)
+        private void NotifyIconOnDoubleClick(object sender, MouseEventArgs e)
         {
             ShowActivatedWindow();
         }
@@ -110,6 +72,88 @@ namespace Barbora.App
         {
             ShowActivatedWindow();
         }
+
+        #endregion
+
+        #region Notifying Service Events
+
+        private void InitializeApiClientEvents()
+        {
+            barboraNotifyingService.OnAvailableTimeFound += OnAvailableTimeFound;
+            barboraNotifyingService.OnJobCompleted += OnJobCompleted;
+            barboraNotifyingService.OnException += OnException;
+        }
+
+        private void OnAvailableTimeFound(object sender, AvailableTimeInfo info)
+        {
+            var text = string.Format(Messages.FoundAvailableTime, info.Day, info.Hour);
+
+            PushMessageToLog(text, JsonConvert.SerializeObject(info));
+
+            DebugUtils.WriteLineToDebugConsole(text);
+        }
+
+        private void OnJobCompleted(object sender, bool endedWithResults)
+        {
+            if (endedWithResults) // found available times
+            {
+                soundPlayerService.Play(SoundsEnum.Default);
+
+                if (notifyIcon != null && notifyIcon.Visible)
+                    notifyIcon.ShowBalloonTip(5000, Messages.BalloonFoundAvailable, Messages.Restore, ToolTipIcon.Info);
+
+                DebugUtils.WriteLineToDebugConsole("Job completed founding available times");
+            }
+            else
+                DebugUtils.WriteLineToDebugConsole("Job completed");
+        }
+
+        private void OnException(object sender, Exception exc)
+        {
+            if (exc is SecurityException securityException)
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    StopTracking();
+                });
+            }
+
+            if (exc is FriendlyException friendlyException)
+                PushMessageToLog(friendlyException.Message);
+
+            throw exc;
+        }
+
+        #endregion
+
+        public async Task ShowAfterLoginAsync()
+        {
+            await LoadAddresses();
+
+            Show();
+        }
+
+        #region Private Methods
+
+        private void ShowActivatedWindow()
+        {
+            WindowState = WindowState.Normal;
+            ShowActivated = true;
+        }
+
+        private void PushMessageToLog(string message, string value = null)
+        {
+            var msg = string.Format("{0} -> {1}", BaseUtils.GetNowDateTime(), message);
+
+            InfoBox.Dispatcher.Invoke(() =>
+            {
+                InfoBox.Items.Add(new BaseListItem { Value = value, Text = msg });
+            });
+        }
+
+        #endregion
+
+        #region Events
 
         protected override void OnStateChanged(EventArgs e)
         {
@@ -120,7 +164,7 @@ namespace Barbora.App
                 ShowInTaskbar = false;
 
                 notifyIcon.Visible = true;
-                notifyIcon.ShowBalloonTip(5000, StartBtn.IsEnabled ? balloonTextNotStarted : balloonTextStarted, restoreText, StartBtn.IsEnabled ? ToolTipIcon.Warning : ToolTipIcon.Info);
+                notifyIcon.ShowBalloonTip(5000, StartBtn.IsEnabled ? Messages.BalloonNotStarted : Messages.BalloonStarted, Messages.Restore, StartBtn.IsEnabled ? ToolTipIcon.Warning : ToolTipIcon.Info);
 
                 notifyIcon.Visible = true;
             }
@@ -131,94 +175,125 @@ namespace Barbora.App
             }
         }
 
+        private bool DisposeOnClosed { get; set; } = true;
+
         protected override void OnClosed(EventArgs e)
         {
             base.OnClosed(e);
 
-            if (barboraApiClient != null)
-                barboraApiClient.Dispose();
-
-            if (barboraNotifyingService != null)
-                barboraNotifyingService.Dispose();
-        }
-
-        private void PushMessageToLog(string message)
-        {
-            var msg = string.Format("{0} -> {1}", GetNowDateTime(), message);
-
-            InfoBox.Dispatcher.Invoke(() =>
+            if (DisposeOnClosed)
             {
-                InfoBox.Items.Add(msg);
-            });
+                if (barboraApiClient != null)
+                    barboraApiClient.Dispose();
+
+                if (barboraNotifyingService != null)
+                    barboraNotifyingService.Dispose();
+            }
         }
 
-        private void NotifyAboutAvailableTime(AvailableTimeInfo info)
+        #endregion
+
+        private async Task LoadAddresses()
         {
-            var text = string.Format("Rastas pristatymo laikas: {0} - {1} val.", info.Day, info.Hour);
+            var addressResponse = await barboraApiClient.GetAddressAsync();
 
-            PushMessageToLog(text);
+            // TODO: [show all addresses in dropdown and let to choose (one or options: "Visi", "Iki duru", "Stoteles", "I automobili")]
 
-            Debug.WriteLine(string.Format("{0} - {1}", GetNowDateTime(), text));
+            var homeAddress = addressResponse?.address.Where(x => x.addressType == (int)AddressTypeEnum.Home && x.deliveryMethodType == (int)DeliveryMethodTypeEnum.Home).FirstOrDefault();
+
+            if (homeAddress == null)
+                throw new FriendlyException(Messages.HomeDeliveryAddressNotFound);
+
+            // TODO: [handle exceptions of type "FriendlyException"]
+
+            await SetDeliveryAddress(homeAddress.id);
         }
 
-        private void NotifyAboutCompletedJob(bool endedWithResults)
+        private async Task SetDeliveryAddress(string addressId)
         {
-            var now = GetNowDateTime();
+            var changeDeliveryAddressResponse = await barboraApiClient.ChangeDeliveryAddressAsync(addressId);
 
-            if (endedWithResults) // found available times
-            {
-                soundPlayerService.Play(SoundsEnum.Default);
-
-                if (notifyIcon != null && notifyIcon.Visible)
-                    notifyIcon.ShowBalloonTip(5000, balloonTextFoundAvailable, restoreText, ToolTipIcon.Info);
-
-                Debug.WriteLine(string.Format("{0} - job completed with results", now));
-            } 
+            if (changeDeliveryAddressResponse != null)
+                PushMessageToLog(string.Format(Messages.DeliveryAddressSetTo, changeDeliveryAddressResponse?.cart?.address));
             else
-                Debug.WriteLine(string.Format("{0} - job completed", now));
-        }
-
-        private void HandleException(Exception exc)
-        {
-            var friendlyException = exc as FriendlyException;
-
-            if (friendlyException != null)
-                PushMessageToLog(friendlyException.Message);
-
-            Debug.WriteLine(exc.Message);
+                throw new FriendlyException(Messages.FailedToChangeDeliveryAddress);
         }
 
         // TODO: [add dropdown where we can choose JOB repeat time in minutes]
-        // TODO: [add checkbox to check that we want to try reserve first available time or not]
-        // TODO: [functionality to try to make a reservation of available time]
 
-        private void StartBtn_Click(object sender, RoutedEventArgs e)
+        private void StartTracking()
         {
             StartBtn.IsEnabled = false;
             StopBtn.IsEnabled = true;
+            LogOutBtn.IsEnabled = false;
 
-            var availableTimeNotifier = new CustomAvailableTimeNotifier(NotifyAboutAvailableTime);
-            var jobDoneNotifier = new CustomJobDoneNotifier(NotifyAboutCompletedJob);
-            var exceptionHandler = new ExceptionHandler(HandleException);
-
-            barboraNotifyingService.SetAvailableTimeNotifier(availableTimeNotifier);
-            barboraNotifyingService.SetJobDoneNotifier(jobDoneNotifier);
-            barboraNotifyingService.SetExceptionHandler(exceptionHandler);
             barboraNotifyingService.SetInterval(60);
 
             barboraNotifyingService.Start();
 
-            PushMessageToLog("Pristatymo laikų sekimas pradėtas");
+            PushMessageToLog(Messages.TrackingStarted);
+        }
+
+        private void StopTracking()
+        {
+            StartBtn.IsEnabled = true;
+            StopBtn.IsEnabled = false;
+            LogOutBtn.IsEnabled = true;
+
+            barboraNotifyingService.Stop();
+
+            PushMessageToLog(Messages.TrackingStoppped);
+        }
+
+        private async Task TryMakeReservation(AvailableTimeInfo info)
+        {
+            var response = await barboraApiClient.ReserveDeliveryTimeSlotAsync(info.DayId, info.HourId, info.IsExpressDelivery);
+
+            if (response.reservationValidForSeconds != 0)
+                PushMessageToLog(string.Format(Messages.ReservationSuccessful, info.Day, info.Hour, response.reservationValidForSeconds / 60));
+            else
+                PushMessageToLog(response.messages.GetFirstErrorMessage());
+        }
+
+        #region Button Click Events
+
+        private void StartBtn_Click(object sender, RoutedEventArgs e)
+        {
+            StartTracking();
         }
 
         private void StopBtn_Click(object sender, RoutedEventArgs e)
         {
-            StartBtn.IsEnabled = true;
-            StopBtn.IsEnabled = false;
-
-            barboraNotifyingService.Stop();
-
-            PushMessageToLog("Pristatymo laikų sekimas sustabdytas");
+            StopTracking();
         }
+
+        private async void ReserveBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if (!(InfoBox.SelectedItem is BaseListItem selectedBaseListItem))
+            {
+                PushMessageToLog(Messages.RowNotSelected);
+                return;
+            }
+
+            if (string.IsNullOrEmpty(selectedBaseListItem.Value))
+            {
+                PushMessageToLog(Messages.SelectedRowMissingInformation);
+                return;
+            }
+
+            var availableTimeInfo = JsonConvert.DeserializeObject<AvailableTimeInfo>(selectedBaseListItem.Value);
+
+            await TryMakeReservation(availableTimeInfo);
+        }
+
+        public void LogOutBtn_Click(object sender, RoutedEventArgs e)
+        {
+            AuthCookieHelper.RemoveAuthCookie();
+            ((App)System.Windows.Application.Current).OpenLoginWindow();
+            DisposeOnClosed = false;
+            Close();
+        }
+
+        #endregion
     }
 }

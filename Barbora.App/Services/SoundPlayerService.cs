@@ -1,5 +1,5 @@
-﻿using Barbora.App.Utils;
-using Barbora.Core.Models;
+﻿using Barbora.App.Models;
+using Barbora.App.Helpers;
 using System;
 using System.IO;
 using System.Media;
@@ -13,47 +13,23 @@ namespace Barbora.App.Services
 
     public class SoundPlayerService : ISoundPlayerService
     {
-        private string defaultSoundName = "Sounds.dixie-horn_daniel-simion.wav";
+        private readonly string defaultSoundName = "Sounds.dixie-horn_daniel-simion.wav";
 
         private Stream GetSoundStream(SoundsEnum soundEnum)
         {
-            var resourceName = string.Empty;
-
-            switch (soundEnum)
+            string resourceName = soundEnum switch
             {
-                case SoundsEnum.Default:
-                    resourceName = defaultSoundName;
-                    break;
-
-                case SoundsEnum.BeepOne:
-                    resourceName = "Sounds.beep-06.wav";
-                    break;
-                case SoundsEnum.CartoonBirds:
-                    resourceName = "Sounds.cartoon-birds-2_daniel-simion.wav";
-                    break;
-                case SoundsEnum.CommonFart:
-                    resourceName = "Sounds.Fart-Common-Everyday-Fart_Mike-Koenig.wav";
-                    break;
-                case SoundsEnum.DixieHorn:
-                    resourceName = "Sounds.dixie-horn_daniel-simion.wav";
-                    break;
-                case SoundsEnum.HornHonk:
-                    resourceName = "Sounds.Horn Honk-SoundBible.com-1162546405";
-                    break;
-                case SoundsEnum.SosMorseCode:
-                    resourceName = "Sounds.sos-morse-code_daniel-simion.wav";
-                    break;
-                case SoundsEnum.Yes:
-                    resourceName = "Sounds.yes-2.wav";
-                    break;
-                case SoundsEnum.Yummy:
-                    resourceName = "yummy.wav";
-                    break;
-
-                default:
-                    resourceName = defaultSoundName;
-                    break;
-            }
+                SoundsEnum.Default => defaultSoundName,
+                SoundsEnum.BeepOne => "Sounds.beep-06.wav",
+                SoundsEnum.CartoonBirds => "Sounds.cartoon-birds-2_daniel-simion.wav",
+                SoundsEnum.CommonFart => "Sounds.Fart-Common-Everyday-Fart_Mike-Koenig.wav",
+                SoundsEnum.DixieHorn => "Sounds.dixie-horn_daniel-simion.wav",
+                SoundsEnum.HornHonk => "Sounds.Horn Honk-SoundBible.com-1162546405",
+                SoundsEnum.SosMorseCode => "Sounds.sos-morse-code_daniel-simion.wav",
+                SoundsEnum.Yes => "Sounds.yes-2.wav",
+                SoundsEnum.Yummy => "Sounds.yummy.wav",
+                _ => defaultSoundName,
+            };
 
             return ResourceHelper.GetResourceStream(resourceName);
         }
@@ -65,7 +41,7 @@ namespace Barbora.App.Services
             if (soundStream == null)
                 throw new ArgumentNullException("soundStream");
 
-            SoundPlayer player = new SoundPlayer(soundStream);
+            var player = new SoundPlayer(soundStream);
 
             player.LoadAsync();
             player.Play();

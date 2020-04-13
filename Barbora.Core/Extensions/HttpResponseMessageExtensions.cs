@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using System;
 using System.Net;
 using System.Net.Http;
+using System.Security;
 using System.Threading.Tasks;
 
 namespace Barbora.Core.Extensions
@@ -49,10 +50,13 @@ namespace Barbora.Core.Extensions
             if (!string.IsNullOrEmpty(errorContent))
             {
                 var errorResponse = JsonConvert.DeserializeObject<ErrorResponse>(errorContent);
-                var errorMessage = errorResponse?.messages?.GetFirstErrorMessage();
+                var error = errorResponse?.messages?.GetFirstError();
 
-                if (!string.IsNullOrEmpty(errorMessage))
-                    throw new FriendlyException(errorMessage);
+                if (error != null && error.Id == "access_denied")
+                    throw new SecurityException(error.message);
+
+                if (!string.IsNullOrEmpty(error?.message))
+                    throw new FriendlyException(error?.message);
             }
 
             throw new Exception(string.Format("Error processing response. Status code: {0}", response.StatusCode.ToString()));

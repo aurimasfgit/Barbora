@@ -10,8 +10,8 @@ namespace Barbora.App.Extensions
         public static void RegisterDefaultContainer(this IServiceCollection serviceCollection)
         {
             serviceCollection.AddSingleton<IBarboraApiClient, BarboraApiClient>();
-            serviceCollection.AddSingleton<IBarboraNotifyingService, BarboraNotifyingService>();
-            serviceCollection.AddSingleton<ISoundPlayerService, SoundPlayerService>();
+            serviceCollection.AddTransient<IBarboraNotifyingService, BarboraNotifyingService>();
+            serviceCollection.AddTransient<ISoundPlayerService, SoundPlayerService>();
         }
     }
 }

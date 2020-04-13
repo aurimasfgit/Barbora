@@ -1,8 +1,11 @@
 ﻿using Barbora.App.Extensions;
+using Barbora.App.Services;
+using Barbora.App.Helpers;
+using Barbora.Core.Clients;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System;
-using System.Diagnostics;
+using System.Net;
 using System.Threading.Tasks;
 using System.Windows;
 
@@ -13,8 +16,6 @@ namespace Barbora.App
         public IConfiguration Configuration { get; private set; }
         public IServiceProvider ServiceProvider { get; private set; }
 
-        public bool IsLoggedIn { get; set; }
-
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
@@ -24,29 +25,54 @@ namespace Barbora.App
 
             SetupExceptionHandling();
 
-            if (IsLoggedIn)
-            {
-                var mainWindow = ServiceProvider.GetRequiredService<IMainWindow>();
+            var barboraApiClient = ServiceProvider.GetRequiredService<IBarboraApiClient>();
 
-                if (mainWindow == null)
-                    throw new ArgumentNullException("mainWindow");
+            if (barboraApiClient != null)
+                barboraApiClient.OnAuthCookieSet += OnAuthCookieSet;
 
-                mainWindow.Show();
-            }
+            if (IsLoggedIn(barboraApiClient))
+                OpenMainWindow();
             else
-            {
-                var loginWindow = ServiceProvider.GetRequiredService<ILoginWindow>();
-
-                if (loginWindow == null)
-                    throw new ArgumentNullException("loginWindow");
-
-                loginWindow.Show();
-            }
+                OpenLoginWindow();
         }
 
-        protected override void OnExit(ExitEventArgs e)
+        public void OpenLoginWindow()
         {
-            base.OnExit(e);
+            var loginWindow = ServiceProvider.GetRequiredService<ILoginWindow>();
+
+            if (loginWindow == null)
+                throw new ArgumentNullException("loginWindow");
+
+            loginWindow.Show();
+        }
+
+        private void OpenMainWindow()
+        {
+            var mainWindow = ServiceProvider.GetRequiredService<IMainWindow>();
+
+            if (mainWindow == null)
+                throw new ArgumentNullException("mainWindow");
+
+            mainWindow.ShowAfterLoginAsync();
+        }
+
+        private bool IsLoggedIn(IBarboraApiClient barboraApiClient)
+        {
+            var authCookie = AuthCookieHelper.GetAuthCookie();
+
+            if (authCookie != null && authCookie.Expires > DateTime.Now)
+            {
+                barboraApiClient.LogIn(authCookie);
+                return true;
+            }
+
+            return false;
+        }
+
+        private void OnAuthCookieSet(object sender, Cookie e)
+        {
+            if (e != null)
+                AuthCookieHelper.SetAuthCookie(e);
         }
 
         private void BuildConfiguration()
@@ -62,6 +88,8 @@ namespace Barbora.App
         {
             var serviceCollection = new ServiceCollection();
 
+            serviceCollection.AddTransient<IExceptionHandlingService, ExceptionHandlingService>();
+
             serviceCollection.AddTransient<ILoginWindow, Login>();
             serviceCollection.AddTransient<IMainWindow, Main>();
 
@@ -70,44 +98,26 @@ namespace Barbora.App
             ServiceProvider = serviceCollection.BuildServiceProvider();
         }
 
-        // TODO: [test exception handling]
         private void SetupExceptionHandling()
         {
+            var exceptionHandlingService = ServiceProvider.GetRequiredService<IExceptionHandlingService>();
+
             AppDomain.CurrentDomain.UnhandledException += (s, e) =>
-                LogUnhandledException((Exception)e.ExceptionObject, "AppDomain.CurrentDomain.UnhandledException");
+                exceptionHandlingService.LogUnhandledException((Exception)e.ExceptionObject, "AppDomain.CurrentDomain.UnhandledException");
 
             DispatcherUnhandledException += (s, e) =>
             {
-                LogUnhandledException(e.Exception, "Application.Current.DispatcherUnhandledException");
+                exceptionHandlingService.LogUnhandledException(e.Exception, "Application.Current.DispatcherUnhandledException");
 
                 e.Handled = true;
             };
 
             TaskScheduler.UnobservedTaskException += (s, e) =>
             {
-                LogUnhandledException(e.Exception, "TaskScheduler.UnobservedTaskException");
+                exceptionHandlingService.LogUnhandledException(e.Exception, "TaskScheduler.UnobservedTaskException");
 
                 e.SetObserved();
             };
-        }
-
-        private void LogUnhandledException(Exception exception, string source)
-        {
-            string message = $"Unhandled exception ({source})";
-
-            try
-            {
-                System.Reflection.AssemblyName assemblyName = System.Reflection.Assembly.GetExecutingAssembly().GetName();
-                message = string.Format("Unhandled exception in {0} v{1}", assemblyName.Name, assemblyName.Version);
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine(ex.Message);
-            }
-            finally
-            {
-                Debug.WriteLine(exception.Message);
-            }
         }
     }
 }

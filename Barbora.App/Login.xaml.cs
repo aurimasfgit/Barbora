@@ -1,7 +1,6 @@
 ﻿using Barbora.Core.Clients;
 using Barbora.Core.Models.Exceptions;
 using System;
-using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
@@ -14,10 +13,10 @@ namespace Barbora.App
         void Show();
     }
 
-    public partial class Login : Window, ILoginWindow
+    public partial class Login : BaseWindow, ILoginWindow
     {
-        private IMainWindow mainWindow;
-        private IBarboraApiClient barboraApiClient;
+        private readonly IMainWindow mainWindow;
+        private readonly IBarboraApiClient barboraApiClient;
 
         public Login(IMainWindow mainWindow, IBarboraApiClient barboraApiClient)
         {
@@ -25,17 +24,35 @@ namespace Barbora.App
             this.barboraApiClient = barboraApiClient;
 
             InitializeComponent();
+
+            SetRegionsComboBox();
+        }
+
+        private void SetRegionsComboBox()
+        {
+            RegionComboBox.SelectedValuePath = "Id";
+            RegionComboBox.DisplayMemberPath = "Value";
+
+            LoadRegions();
+
+            RegionComboBox.SelectedIndex = 0;
+        }
+
+        private void LoadRegions()
+        {
+            RegionComboBox.Items.Add(new { Id = 0, Value = "Numatytasis" });
+
+            // TODO: [fill region combobox with real data]
         }
 
         private bool CloseMainWindow { get; set; } = true;
 
-        private async Task OpenMainWindowAsync()
+        private bool RememberMe
         {
-            CloseMainWindow = false;
-
-            Close();
-
-            await mainWindow.InitializeAfterLoginAsync();
+            get
+            {
+                return RememberMeCheckBox.IsChecked ?? true;
+            }
         }
 
         protected override void OnClosed(EventArgs e)
@@ -46,7 +63,7 @@ namespace Barbora.App
                 mainWindow.Close();
         }
 
-        protected override void OnKeyDown(System.Windows.Input.KeyEventArgs e)
+        protected override void OnKeyDown(KeyEventArgs e)
         {
             base.OnKeyDown(e);
 
@@ -59,7 +76,14 @@ namespace Barbora.App
             errorMessage.Text = message;
         }
 
-        // TODO: [add region (Vilnius, Kaunas, Alytus, ...) dropdown]
+        private async Task OpenMainWindowAsync()
+        {
+            CloseMainWindow = false;
+
+            Close();
+
+            await mainWindow.ShowAfterLoginAsync();
+        }
 
         private async void LoginBtn_Click(object sender, RoutedEventArgs e)
         {
@@ -83,22 +107,18 @@ namespace Barbora.App
             {
                 try
                 {
-                    // TODO: [add "remember me" checkbox]
-                    await barboraApiClient.LogInAsync(emailTextBox.Text, passwordTextBox.Password, true);
-
+                    // TODO: [log in to selected region]
+                    await barboraApiClient.LogInAsync(emailTextBox.Text, passwordTextBox.Password, RememberMe);
                     await OpenMainWindowAsync();
                 }
                 catch (FriendlyException exc)
                 {
                     SetErrorMessage(exc.Message);
                 }
-                catch (Exception exc)
+                catch
                 {
-                    // TODO: [LOG EXCEPTION]
-
                     SetErrorMessage("Vidinė serverio klaida");
-
-                    Debug.WriteLine(exc?.Message);
+                    throw;
                 }
             }
         }

@@ -25,7 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="barbora.ico" />
+    <EmbeddedResource Include="Icons\barbora.ico" />
     <EmbeddedResource Include="Sounds\beep-06.wav" />
     <EmbeddedResource Include="Sounds\cartoon-birds-2_daniel-simion.wav" />
     <EmbeddedResource Include="Sounds\dixie-horn_daniel-simion.wav" />
@@ -39,6 +39,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="3.1.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="3.1.2" />
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
   </ItemGroup>
 
   <ItemGroup>

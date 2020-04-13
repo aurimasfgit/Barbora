@@ -1,4 +1,4 @@
-﻿<Window x:Class="Barbora.App.Main"
+﻿<local:BaseWindow x:Class="Barbora.App.Main"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -6,12 +6,14 @@
         xmlns:local="clr-namespace:Barbora.App"
         mc:Ignorable="d"
         WindowStartupLocation="CenterScreen"
-        Title="Barbora" Height="248" Width="712"
+        Title="Barbora" Height="369" Width="712"
         ResizeMode="CanMinimize">
     <Grid>
         <Button Content="Start" Height="23" HorizontalAlignment="Left" Margin="10,33,0,0" Name="StartBtn" VerticalAlignment="Top" Width="104" Click="StartBtn_Click" />
         <Button Content="Stop" Height="23" HorizontalAlignment="Left" Margin="10,61,0,0" Name="StopBtn" VerticalAlignment="Top" Width="104" Click="StopBtn_Click" />
         <ListBox Margin="119,33,10,10" Name="InfoBox" />
         <Label Content="Įvykių žurnalas" HorizontalAlignment="Left" Margin="119,7,0,0" VerticalAlignment="Top" Width="371"/>
+        <Button Height="23"  Content="Atsijungti" Name="LogOutBtn" HorizontalAlignment="Left" Margin="10,297,0,0" VerticalAlignment="Top" Width="104" Click="LogOutBtn_Click"/>
+        <Button Content="Rezervuoti" Height="23" HorizontalAlignment="Left" Margin="10,89,0,0" x:Name="ReserveBtn" VerticalAlignment="Top" Width="104" Click="ReserveBtn_Click" />
     </Grid>
-</Window>
+</local:BaseWindow>

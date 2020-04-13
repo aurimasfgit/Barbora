@@ -11,9 +11,14 @@ namespace Barbora.Core.Models
 
         public object data { get; set; }
 
+        public MessageInfo GetFirstError()
+        {
+            return error?[0];
+        }
+
         public string GetFirstErrorMessage()
         {
-            return error?[0]?.message;
+            return GetFirstError()?.message;
         }
 
         public string GetFirstWarningMessage()

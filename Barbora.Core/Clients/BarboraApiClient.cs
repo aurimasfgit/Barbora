@@ -1,25 +1,29 @@
 ﻿using Barbora.Core.Extensions;
 using Barbora.Core.Models;
-using Barbora.Core.Models.Exceptions;
+using Barbora.Core.Utils;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Security;
 using System.Threading.Tasks;
 
 namespace Barbora.Core.Clients
 {
     public interface IBarboraApiClient
     {
+        void LogIn(Cookie authCookie);
+
         Task LogInAsync(string email, string password, bool rememberMe);
 
         Task<AddressResponse> GetAddressAsync();
         Task<ChangeDeliveryAddressResponse> ChangeDeliveryAddressAsync(string deliveryAddressId);
         Task<DeliveriesResponse> GetDeliveriesAsync();
         Task<DeliveriesResponse> ReserveDeliveryTimeSlotAsync(string dayId, string hourId, bool isExpressDeliveryTimeslot);
+
+        event EventHandler<Cookie> OnAuthCookieSet;
 
         void Dispose();
     }
@@ -43,12 +47,14 @@ namespace Barbora.Core.Clients
 
         #endregion
 
+        public event EventHandler<Cookie> OnAuthCookieSet;
+
         private string Email { get; set; }
         private string Password { get; set; }
         private bool RememberMe { get; set; }
 
-        private HttpClient httpClient;
-        private CookieContainer cookieContainer;
+        private readonly HttpClient httpClient;
+        private readonly CookieContainer cookieContainer;
         private Cookie authCookie;
 
         public BarboraApiClient()
@@ -56,7 +62,6 @@ namespace Barbora.Core.Clients
             cookieContainer = new CookieContainer();
 
             cookieContainer.Add(new Uri(BarboraUrl), new Cookie("region", "barbora.lt"));
-            cookieContainer.Add(new Uri(BarboraUrl), new Cookie("permissionToUseCookies", "true"));
 
             var httpClientHandler = new HttpClientHandler { CookieContainer = cookieContainer };
 
@@ -74,7 +79,7 @@ namespace Barbora.Core.Clients
             ValidateAndSetCredentials(email, password, rememberMe);
         }
 
-        public void SetCredentials(string email, string password, bool rememberMe)
+        private void SetCredentials(string email, string password, bool rememberMe)
         {
             ValidateAndSetCredentials(email, password, rememberMe);
         }
@@ -105,6 +110,8 @@ namespace Barbora.Core.Clients
 
             var response = await httpClient.GetAsync(requestUri);
 
+            ReadAuthCookie();
+
             return await response.ProcessResponseAsync<T>();
         }
 
@@ -121,6 +128,8 @@ namespace Barbora.Core.Clients
             await CheckAndLogInAsync();
 
             var response = await httpClient.PutAsync(requestUri, content);
+
+            ReadAuthCookie();
 
             return await response.ProcessResponseAsync<T>();
         }
@@ -139,34 +148,58 @@ namespace Barbora.Core.Clients
 
             var response = await httpClient.PostAsync(requestUri, content);
 
+            ReadAuthCookie();
+
             return await response.ProcessResponseAsync<T>();
         }
 
         #region Authentication
 
+        private void ReadAuthCookie()
+        {
+            var responseCookies = cookieContainer?.GetCookies(new Uri(BarboraUrl))?.Cast<Cookie>();
+            var authCookie = responseCookies?.Where(x => x.Name == AuthCookieName)?.FirstOrDefault();
+
+            if (authCookie == null)
+                throw new SecurityException(string.Format("Auth cookie \"{0}\" was not found", AuthCookieName));
+
+            SetAuthCookie(authCookie);
+        }
+
         private void SetAuthCookie(Cookie authCookie)
         {
-            // TODO: [refactor this method - this look not very good...]
+            // TODO: [refactor these datetime things]
             var timeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById("FLE Standard Time");
             var utcTime = authCookie.Expires;
             var utcTimeSpan = TimeSpan.FromTicks(utcTime.Ticks);
             var expiresTimeSpan = utcTimeSpan.Add(-timeZoneInfo.BaseUtcOffset);
 
             authCookie.Expires = new DateTime(expiresTimeSpan.Ticks);
+            // TODO: [refactor till here]
 
-            Debug.WriteLine(string.Format("{0} - logging in. Cookie expires: {1}", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"), authCookie.Expires.ToString("yyyy-MM-dd HH:mm:ss")));
+            DebugUtils.WriteLineToDebugConsole(string.Format("Setting new auth cookie. Cookie expires at {0}", authCookie.Expires.ToString("yyyy-MM-dd HH:mm:ss")));
+
+            OnAuthCookieSet?.Invoke(this, authCookie);
 
             this.authCookie = authCookie;
         }
 
         private async Task CheckAndLogInAsync()
         {
-            if (string.IsNullOrEmpty(Email) || string.IsNullOrEmpty(Password))
-                throw new FriendlyException("Neįvestas el. pašto adresas ir / arba slaptažodis");
-
-            // check if login is needed
-            if (!(authCookie == null || authCookie.Expired))
+            if (!(authCookie == null || authCookie.Expires <= DateTime.Now))
                 return;
+
+            if (string.IsNullOrEmpty(Email) || string.IsNullOrEmpty(Password))
+                throw new SecurityException("You're not logged in");
+            else
+                await LogInAsync(Email, Password, RememberMe);
+        }
+
+        #endregion      
+
+        public async Task LogInAsync(string email, string password, bool rememberMe)
+        {
+            SetCredentials(email, password, rememberMe);
 
             var content = new FormUrlEncodedContent(new[]
             {
@@ -179,26 +212,23 @@ namespace Barbora.Core.Clients
 
             if (response.StatusCode == HttpStatusCode.OK)
             {
-                var responseCookies = cookieContainer.GetCookies(new Uri(BarboraUrl)).Cast<Cookie>();
-                var authCookie = responseCookies.Where(x => x.Name == AuthCookieName).FirstOrDefault();
+                var loginResponse = await response.ProcessResponseAsync<LoginResponse>();
 
-                if (authCookie == null)
-                    throw new Exception(string.Format("Got error while logging in. Cookie \"{0}\" was not found.", AuthCookieName));
-
-                SetAuthCookie(authCookie);
+                if (loginResponse.success)
+                    ReadAuthCookie();
             }
             else
                 await response.ProcessResponseWhenErrorAsync();
         }
 
-        #endregion      
-
-        public async Task LogInAsync(string email, string password, bool rememberMe)
+        public void LogIn(Cookie authCookie)
         {
-            if (!(string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password)))
-                SetCredentials(email, password, rememberMe);
+            if (authCookie == null)
+                throw new ArgumentNullException("authCookie");
 
-            await CheckAndLogInAsync();
+            cookieContainer.Add(new Uri(BarboraUrl), authCookie);
+
+            this.authCookie = authCookie;
         }
 
         public async Task<AddressResponse> GetAddressAsync()

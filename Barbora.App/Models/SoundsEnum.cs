@@ -1,4 +1,4 @@
-﻿namespace Barbora.Core.Models
+﻿namespace Barbora.App.Models
 {
     public enum SoundsEnum : int
     {
